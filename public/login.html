@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MindApp - Login</title>
     <link rel="stylesheet" href="/style.css">
 </head>
+
 <body>
     <header class="header">
         <div class="header-content">
@@ -17,6 +19,7 @@
                 <a href="/">Home</a>
                 <a href="/assessment">Take Assessment</a>
                 <a href="/login">Login</a>
+                <a href="/admin">Support</a>
             </div>
         </div>
     </header>
@@ -44,23 +47,23 @@
     <script>
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
-            
+
             try {
                 const response = await fetch('/api/support/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, password })
                 });
-                
+
                 const result = await response.json();
-                
+
                 if (response.ok) {
                     localStorage.setItem('userToken', result.token);
                     localStorage.setItem('userEmail', result.user.email);
-                    
+
                     // Check if there's a pending session to link
                     const pendingSession = localStorage.getItem('pendingSessionToken');
                     if (pendingSession) {
@@ -74,13 +77,13 @@
                             },
                             body: JSON.stringify({ sessionToken: pendingSession })
                         });
-                        
+
                         if (linkResponse.ok) {
                             const linkResult = await linkResponse.json();
                             alert(linkResult.supportMessage);
                         }
                     }
-                    
+
                     window.location.href = '/';
                 } else {
                     alert(result.error || 'Login failed');
@@ -92,4 +95,5 @@
         });
     </script>
 </body>
+
 </html>
