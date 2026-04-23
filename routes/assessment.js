@@ -1,9 +1,12 @@
+// routes/assessment.js
 const express = require('express');
 const router = express.Router();
-const assessmentController = require('../controllers/assessmentController');
+const { submitAssessment, getSession } = require('../controllers/assessmentController');
 
-router.post('/submit', assessmentController.submitAssessment);
-router.get('/session/:token', assessmentController.getSession);
-router.get('/questions', assessmentController.getActiveQuestions);
+// POST /api/assessment/submit - Submit assessment answers
+router.post('/submit', submitAssessment);
+
+// GET /api/assessment/session/:token - Get assessment session
+router.get('/session/:token', getSession);
 
 module.exports = router;

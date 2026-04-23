@@ -1,32 +1,36 @@
+// routes/admin.js
 const express = require('express');
 const router = express.Router();
-const adminController = require('../controllers/adminController');
 const { authenticateAdmin } = require('../middleware/auth');
+const adminController = require('../controllers/adminController');
 
-// Admin auth
+// Admin authentication (no auth required for login)
 router.post('/login', adminController.login);
 
-// Question management
-router.get('/questions', authenticateAdmin, adminController.getAllQuestions);
-router.post('/questions', authenticateAdmin, adminController.createQuestion);
-router.put('/questions/:id', authenticateAdmin, adminController.updateQuestion);
-router.delete('/questions/:id', authenticateAdmin, adminController.deleteQuestion);
+// All admin routes below require authentication
+router.use(authenticateAdmin);
 
-// Rating rules
-router.get('/rules', authenticateAdmin, adminController.getRules);
-router.post('/rules', authenticateAdmin, adminController.createRule);
-router.delete('/rules/:id', authenticateAdmin, adminController.deleteRule);
+// Questions management
+router.get('/questions', adminController.getAllQuestions);
+router.post('/questions', adminController.createQuestion);
+router.put('/questions/:id', adminController.updateQuestion);
+router.delete('/questions/:id', adminController.deleteQuestion);
 
 // Risk thresholds
-router.get('/thresholds', authenticateAdmin, adminController.getThresholds);
-router.post('/thresholds', authenticateAdmin, adminController.createThreshold);
-router.put('/thresholds/:id', authenticateAdmin, adminController.updateThreshold);
+router.get('/thresholds', adminController.getThresholds);
+router.post('/thresholds', adminController.createThreshold);
+router.put('/thresholds/:id', adminController.updateThreshold);
 
 // Support requests
-router.get('/support-requests', authenticateAdmin, adminController.getSupportRequests);
-router.put('/support-requests/:id/status', authenticateAdmin, adminController.updateSupportStatus);
+router.get('/support-requests', adminController.getSupportRequests);
+router.put('/support-requests/:id/status', adminController.updateSupportStatus);
 
-// Stats
-router.get('/stats', authenticateAdmin, adminController.getStats);
+// Statistics
+router.get('/stats', adminController.getStats);
+
+// Rating rules
+router.get('/rules', adminController.getRules);
+router.post('/rules', adminController.createRule);
+router.delete('/rules/:id', adminController.deleteRule);
 
 module.exports = router;

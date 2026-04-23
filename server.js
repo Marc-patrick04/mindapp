@@ -1,70 +1,39 @@
-require('dotenv').config();
+// server.js
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
-const session = require('express-session');
-const { Pool } = require('pg');
-
-// Import routes
-const assessmentRoutes = require('./routes/assessment');
-const questionsRoutes = require('./routes/questions');
-const supportRoutes = require('./routes/support');
-const adminRoutes = require('./routes/admin');
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Database connection
-const pool = new Pool({
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
-  database: process.env.DB_NAME,
-});
-
-// Make db available to routes
-app.locals.db = pool;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static('public'));
 
-// Session middleware
-app.use(session({
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: { secure: false, maxAge: 3600000 } // 1 hour
-}));
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Routes
-app.use('/api/questions', questionsRoutes);
+// Import routes
+const assessmentRoutes = require('./routes/assessment');
+const adminRoutes = require('./routes/admin');
+const supportRoutes = require('./routes/support');
+const questionsRoutes = require('./routes/questions');
+
+// ============================================
+// MOUNT API ROUTES
+// ============================================
 app.use('/api/assessment', assessmentRoutes);
-app.use('/api/support', supportRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/support', supportRoutes);
+app.use('/api', questionsRoutes);  // This should handle /api/questions
 
-// Serve HTML pages
+// ============================================
+// HTML ROUTES (for serving pages)
+// ============================================
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.get('/assessment', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'assessment.html'));
-});
-
-app.get('/result', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'result.html'));
-});
-
-app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'login.html'));
-});
-
-app.get('/register', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'register.html'));
 });
 
 app.get('/admin', (req, res) => {
@@ -75,9 +44,43 @@ app.get('/admin-login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin-login.html'));
 });
 
+app.get('/assessment', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'assessment.html'));
+});
+
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.get('/register', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'register.html'));
+});
+
+app.get('/result', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'result.html'));
+});
+
+// ============================================
+// 404 Handler for undefined routes
+// ============================================
+app.use('*', (req, res) => {
+  // Check if it's an API request
+  if (req.path.startsWith('/api/')) {
+    res.status(404).json({ error: `API endpoint '${req.path}' not found` });
+  } else {
+    res.status(404).sendFile(path.join(__dirname, 'public', 'index.html'));
+  }
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({ error: 'Internal server error: ' + err.message });
+});
+
 // Start server
 app.listen(PORT, () => {
-  console.log(`🧠 MindApp running on http://localhost:${PORT}`);
-  console.log(`📋 Assessment: http://localhost:${PORT}/assessment`);
-  console.log(`👨‍💼 Admin Login: http://localhost:${PORT}/admin-login`);
+  console.log(`✅ Server running on http://localhost:${PORT}`);
+  console.log(`📡 API available at http://localhost:${PORT}/api`);
+  console.log(`📊 Questions endpoint: http://localhost:${PORT}/api/questions`);
 });
