@@ -375,6 +375,7 @@
             color: var(--primary-blue);
         }
 
+        /* Error message styles */
         .error-message {
             background: #fadbd8;
             color: #E74C3C;
@@ -382,6 +383,74 @@
             border-radius: 10px;
             text-align: center;
             margin: 20px 0;
+        }
+
+        .error-message strong {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 1.1rem;
+        }
+
+        .error-message small {
+            display: block;
+            margin-top: 8px;
+            font-size: 0.85rem;
+            color: #c0392b;
+        }
+
+        .error-message.connection-error {
+            background: #fef9e7;
+            border-left: 4px solid #f39c12;
+            color: #7d6608;
+        }
+
+        .error-message.connection-error small {
+            color: #7d6608;
+        }
+
+        .toast-message {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            z-index: 1000;
+            animation: slideUp 0.3s ease;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .toast-message.error {
+            background: #E74C3C;
+        }
+
+        .toast-message.success {
+            background: var(--primary-green);
+            color: #333;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        .retry-btn {
+            margin-top: 10px;
+            background: var(--primary-blue);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -397,6 +466,7 @@
                 <button class="nav-tab" onclick="showSection('home')">Home</button>
                 <button class="nav-tab" onclick="showSection('assessment')">Take Assessment</button>
                 <button class="nav-tab" onclick="showSection('login')">Login</button>
+                <a href="/admin-login">Support</a>
             </div>
         </div>
     </header>
@@ -571,6 +641,65 @@
         let answers = {};
         let isLoading = false;
 
+        // Toast notification function
+        function showToast(message, type = 'error') {
+            const toast = document.createElement('div');
+            toast.className = `toast-message ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        // Show error message in container
+        function showErrorInContainer(container, errorType, errorMessage, onRetry = null) {
+            let html = '';
+
+            if (errorType === 'connection') {
+                html = `
+                    <div class="error-message connection-error">
+                        <strong>🔌 Connection Error</strong>
+                        <p>Cannot connect to the server. Please check your internet connection.</p>
+                        <small>${errorMessage}</small>
+                        ${onRetry ? '<button class="retry-btn" onclick="' + onRetry + '()">Retry</button>' : ''}
+                    </div>
+                `;
+            } else if (errorType === 'database') {
+                html = `
+                    <div class="error-message">
+                        <strong>🗄️ Database Error</strong>
+                        <p>There was an issue with the database. Our team has been notified.</p>
+                        <small>${errorMessage}</small>
+                        ${onRetry ? '<button class="retry-btn" onclick="' + onRetry + '()">Retry</button>' : ''}
+                    </div>
+                `;
+            } else if (errorType === 'auth') {
+                html = `
+                    <div class="error-message">
+                        <strong>🔐 Authentication Error</strong>
+                        <p>${errorMessage}</p>
+                        <small>Please check your credentials and try again.</small>
+                    </div>
+                `;
+            } else if (errorType === 'validation') {
+                html = `
+                    <div class="error-message">
+                        <strong>⚠️ Validation Error</strong>
+                        <p>${errorMessage}</p>
+                    </div>
+                `;
+            } else {
+                html = `
+                    <div class="error-message">
+                        <strong>❌ Error</strong>
+                        <p>${errorMessage}</p>
+                        ${onRetry ? '<button class="retry-btn" onclick="' + onRetry + '()">Retry</button>' : ''}
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
         function showSection(sectionName) {
             document.querySelectorAll('.section').forEach(section => {
                 section.classList.remove('active');
@@ -601,14 +730,23 @@
                 const response = await fetch('/api/questions');
 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    // Handle different HTTP status codes
+                    if (response.status === 500) {
+                        throw new Error('Database connection error. Please try again later.');
+                    } else if (response.status === 404) {
+                        throw new Error('Questions endpoint not found. Please check server configuration.');
+                    } else if (response.status === 403 || response.status === 401) {
+                        throw new Error('Authentication error. Please refresh the page.');
+                    } else {
+                        throw new Error(`Server error (${response.status})`);
+                    }
                 }
 
                 questions = await response.json();
                 console.log('Loaded questions:', questions);
 
                 if (!questions || questions.length === 0) {
-                    container.innerHTML = '<div class="error-message">No questions available. Please contact administrator.</div>';
+                    showErrorInContainer(container, 'database', 'No questions available in the database. Please contact the administrator.', 'loadQuestions');
                     return;
                 }
 
@@ -619,8 +757,17 @@
                 updateProgress();
             } catch (error) {
                 console.error('Error loading questions:', error);
-                container.innerHTML = '<div class="error-message">Failed to load questions. Please refresh the page.</div>';
-                alert('Failed to load questions. Please refresh the page.');
+                const errorMessage = error.message || 'Failed to load questions';
+
+                // Determine error type
+                if (errorMessage.includes('Database') || errorMessage.includes('database')) {
+                    showErrorInContainer(container, 'database', errorMessage, 'loadQuestions');
+                } else if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+                    showErrorInContainer(container, 'connection', 'Unable to reach the server. Please check if the server is running.', 'loadQuestions');
+                } else {
+                    showErrorInContainer(container, 'general', errorMessage, 'loadQuestions');
+                }
+                showToast(errorMessage, 'error');
             } finally {
                 isLoading = false;
             }
@@ -832,7 +979,7 @@
         async function submitAssessment() {
             const answeredCount = Object.keys(answers).length;
             if (answeredCount < questions.length) {
-                alert(`Please answer all questions. (${answeredCount}/${questions.length} completed)`);
+                showToast(`Please answer all questions. (${answeredCount}/${questions.length} completed)`, 'error');
                 return;
             }
 
@@ -848,6 +995,16 @@
                     body: JSON.stringify({ answers: formattedAnswers })
                 });
 
+                if (!response.ok) {
+                    if (response.status === 500) {
+                        throw new Error('Database error while saving your assessment. Please try again.');
+                    } else if (response.status === 400) {
+                        throw new Error('Invalid submission data. Please review your answers.');
+                    } else {
+                        throw new Error(`Server error (${response.status})`);
+                    }
+                }
+
                 const result = await response.json();
 
                 localStorage.setItem('sessionToken', result.sessionToken);
@@ -857,9 +1014,10 @@
                 localStorage.setItem('colorCode', result.colorCode);
 
                 showResults(result);
+                showToast('Assessment submitted successfully!', 'success');
             } catch (error) {
                 console.error('Error submitting assessment:', error);
-                alert('Failed to submit assessment. Please try again.');
+                showToast(error.message || 'Failed to submit assessment. Please try again.', 'error');
             }
         }
 
@@ -895,7 +1053,7 @@
         async function requestSupport() {
             const sessionToken = localStorage.getItem('sessionToken');
             if (!sessionToken) {
-                alert('Session expired. Please take the assessment again.');
+                showToast('Session expired. Please take the assessment again.', 'error');
                 showSection('assessment');
                 return;
             }
@@ -918,12 +1076,25 @@
                     },
                     body: JSON.stringify({ sessionToken })
                 });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        localStorage.removeItem('userToken');
+                        throw new Error('Your session has expired. Please login again.');
+                    } else if (response.status === 404) {
+                        throw new Error('Assessment session not found. Please take the assessment again.');
+                    } else if (response.status === 500) {
+                        throw new Error('Database error. Please try again later.');
+                    }
+                    throw new Error('Failed to request support');
+                }
+
                 const result = await response.json();
-                alert(result.supportMessage);
+                showToast(result.supportMessage, 'success');
                 showSection('home');
             } catch (error) {
                 console.error('Error requesting support:', error);
-                alert('Failed to request support. Please try again later.');
+                showToast(error.message || 'Failed to request support. Please try again later.', 'error');
             }
         }
 
@@ -931,11 +1102,16 @@
             alert('Wellness Tips:\n\n• Practice mindfulness daily\n• Set spending limits\n• Find healthy alternatives to gambling\n• Talk to friends and family\n• Join our wellness workshops');
         }
 
-        // Login handler
+        // Login handler with better error messages
         document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Logging in...';
 
             try {
                 const response = await fetch('/api/support/login', {
@@ -943,11 +1119,13 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, password })
                 });
+
                 const result = await response.json();
 
                 if (response.ok) {
                     localStorage.setItem('userToken', result.token);
                     localStorage.setItem('userEmail', result.user.email);
+                    showToast('Login successful!', 'success');
 
                     const pendingSession = localStorage.getItem('pendingSessionToken');
                     if (pendingSession) {
@@ -959,29 +1137,54 @@
                         });
                         if (linkResponse.ok) {
                             const linkResult = await linkResponse.json();
-                            alert(linkResult.supportMessage);
+                            showToast(linkResult.supportMessage, 'success');
                         }
                     }
                     showSection('home');
                 } else {
-                    alert(result.error || 'Login failed');
+                    // Handle specific error messages
+                    if (result.error === 'Invalid credentials') {
+                        showToast('Invalid email or password. Please try again.', 'error');
+                    } else if (result.error === 'User not found') {
+                        showToast('No account found with this email. Please register first.', 'error');
+                    } else {
+                        showToast(result.error || 'Login failed. Please try again.', 'error');
+                    }
                 }
             } catch (error) {
-                alert('Login failed. Please try again.');
+                console.error('Login error:', error);
+                if (error.message.includes('Failed to fetch')) {
+                    showToast('Cannot connect to server. Please check your connection.', 'error');
+                } else {
+                    showToast('Login failed. Please try again.', 'error');
+                }
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
             }
         });
 
-        // Register handler
+        // Register handler with better error messages
         document.getElementById('registerForm')?.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('regEmail').value;
             const password = document.getElementById('regPassword').value;
             const confirmPassword = document.getElementById('regConfirmPassword').value;
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
 
             if (password !== confirmPassword) {
-                alert('Passwords do not match');
+                showToast('Passwords do not match', 'error');
                 return;
             }
+
+            if (password.length < 6) {
+                showToast('Password must be at least 6 characters long', 'error');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Creating account...';
 
             try {
                 const response = await fetch('/api/support/register', {
@@ -989,11 +1192,13 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, password })
                 });
+
                 const result = await response.json();
 
                 if (response.ok) {
                     localStorage.setItem('userToken', result.token);
                     localStorage.setItem('userEmail', result.user.email);
+                    showToast('Registration successful! Welcome to MindApp!', 'success');
 
                     const pendingSession = localStorage.getItem('pendingSessionToken');
                     if (pendingSession) {
@@ -1005,15 +1210,29 @@
                         });
                         if (linkResponse.ok) {
                             const linkResult = await linkResponse.json();
-                            alert(linkResult.supportMessage);
+                            showToast(linkResult.supportMessage, 'success');
                         }
                     }
                     showSection('home');
                 } else {
-                    alert(result.error || 'Registration failed');
+                    if (result.error === 'User already exists') {
+                        showToast('An account with this email already exists. Please login instead.', 'error');
+                    } else if (result.error.includes('email')) {
+                        showToast('Please enter a valid email address.', 'error');
+                    } else {
+                        showToast(result.error || 'Registration failed. Please try again.', 'error');
+                    }
                 }
             } catch (error) {
-                alert('Registration failed. Please try again.');
+                console.error('Registration error:', error);
+                if (error.message.includes('Failed to fetch')) {
+                    showToast('Cannot connect to server. Please check your connection.', 'error');
+                } else {
+                    showToast('Registration failed. Please try again.', 'error');
+                }
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
             }
         });
 
