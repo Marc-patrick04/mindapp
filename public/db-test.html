@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Database Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+        }
+
+        .success {
+            color: green;
+        }
+
+        .error {
+            color: red;
+        }
+
+        .info {
+            color: blue;
+        }
+
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Database Connection Test</h1>
+    <div id="results">Testing...</div>
+
+    <script>
+        async function testDatabase() {
+            const resultsDiv = document.getElementById('results');
+
+            try {
+                // Test health endpoint
+                const healthRes = await fetch('/api/health');
+                const health = await healthRes.json();
+
+                resultsDiv.innerHTML = `
+                    <div class="success">✅ Server is running!</div>
+                    <div class="info">📅 Time: ${health.timestamp}</div>
+                    <div class="info">🌍 Environment: ${health.environment}</div>
+                    <hr>
+                    <h3>Testing /api/questions endpoint:</h3>
+                `;
+
+                // Test questions endpoint
+                const questionsRes = await fetch('/api/questions');
+                if (questionsRes.ok) {
+                    const questions = await questionsRes.json();
+                    resultsDiv.innerHTML += `
+                        <div class="success">✅ Questions endpoint working!</div>
+                        <div>📊 Found ${questions.length} questions</div>
+                        <pre>${JSON.stringify(questions.slice(0, 2), null, 2)}</pre>
+                    `;
+                } else {
+                    resultsDiv.innerHTML += `<div class="error">❌ Questions endpoint failed: ${questionsRes.status}</div>`;
+                }
+
+            } catch (error) {
+                resultsDiv.innerHTML += `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        testDatabase();
+    </script>
+</body>
+
+</html>
