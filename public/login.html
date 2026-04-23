@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindApp - Login</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <h1>🧠 MindApp</h1>
+                <p>Connect. Detect. Support.</p>
+            </div>
+            <div class="nav">
+                <a href="/">Home</a>
+                <a href="/assessment">Take Assessment</a>
+                <a href="/login">Login</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="card" style="max-width: 500px; margin: 0 auto;">
+            <h2 style="text-align: center; color: var(--primary-blue);">Login to MindApp</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" id="email" required placeholder="student@university.edu">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="password" required placeholder="Enter your password">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Login</button>
+            </form>
+            <p style="text-align: center; margin-top: 20px;">
+                Don't have an account? <a href="/register">Register here</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('/api/support/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    localStorage.setItem('userToken', result.token);
+                    localStorage.setItem('userEmail', result.user.email);
+                    
+                    // Check if there's a pending session to link
+                    const pendingSession = localStorage.getItem('pendingSessionToken');
+                    if (pendingSession) {
+                        localStorage.removeItem('pendingSessionToken');
+                        // Link the session
+                        const linkResponse = await fetch('/api/support/link-session', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${result.token}`
+                            },
+                            body: JSON.stringify({ sessionToken: pendingSession })
+                        });
+                        
+                        if (linkResponse.ok) {
+                            const linkResult = await linkResponse.json();
+                            alert(linkResult.supportMessage);
+                        }
+                    }
+                    
+                    window.location.href = '/';
+                } else {
+                    alert(result.error || 'Login failed');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('Login failed. Please try again.');
+            }
+        });
+    </script>
+</body>
+</html>

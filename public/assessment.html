@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindApp - Mental Health Assessment</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <h1>🧠 MindApp</h1>
+                <p>Connect. Detect. Support.</p>
+            </div>
+            <div class="nav">
+                <a href="/">Home</a>
+                <a href="/assessment">Take Assessment</a>
+                <a href="/login">Login</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="card">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+            </div>
+            
+            <div id="questionsContainer"></div>
+            
+            <div style="display: flex; justify-content: space-between; margin-top: 30px;">
+                <button class="btn" id="prevBtn" onclick="prevQuestion()" style="display: none;">← Previous</button>
+                <button class="btn btn-primary" id="nextBtn" onclick="nextQuestion()">Next →</button>
+                <button class="btn btn-success" id="submitBtn" onclick="submitAssessment()" style="display: none;">Submit Assessment</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let questions = [];
+        let currentIndex = 0;
+        let answers = {};
+        
+        // Load questions
+        async function loadQuestions() {
+            try {
+                const response = await fetch('/api/questions');
+                questions = await response.json();
+                renderQuestion();
+            } catch (error) {
+                console.error('Error loading questions:', error);
+                alert('Failed to load questions. Please refresh the page.');
+            }
+        }
+        
+        function renderQuestion() {
+            if (currentIndex >= questions.length) return;
+            
+            const question = questions[currentIndex];
+            const container = document.getElementById('questionsContainer');
+            
+            let html = `
+                <div class="question-card">
+                    <div class="question-text">${currentIndex + 1}. ${question.question_text}</div>
+                    <div class="question-options" id="questionOptions">
+            `;
+            
+            if (question.question_type === 'yesno') {
+                const saved = answers[question.id];
+                html += `
+                    <div class="yesno-buttons">
+                        <button class="yesno-btn ${saved === 'yes' ? 'selected' : ''}" onclick="setAnswer(${question.id}, 'yes')">Yes</button>
+                        <button class="yesno-btn ${saved === 'no' ? 'selected' : ''}" onclick="setAnswer(${question.id}, 'no')">No</button>
+                    </div>
+                `;
+            } else if (question.question_type === 'scale') {
+                const saved = answers[question.id];
+                html += `<div class="scale-input">`;
+                for (let i = question.scale_min; i <= question.scale_max; i++) {
+                    html += `
+                        <button class="scale-btn ${saved == i ? 'selected' : ''}" onclick="setAnswer(${question.id}, ${i})">${i}</button>
+                    `;
+                }
+                html += `</div>`;
+            } else if (question.question_type === 'checklist') {
+                const saved = answers[question.id] ? JSON.parse(answers[question.id]) : [];
+                const options = JSON.parse(question.options);
+                html += `<div class="checklist-group">`;
+                options.forEach(option => {
+                    html += `
+                        <label class="checklist-item">
+                            <input type="checkbox" value="${option}" ${saved.includes(option) ? 'checked' : ''} onchange="updateChecklist(${question.id}, '${option}', this.checked)">
+                            ${option}
+                        </label>
+                    `;
+                });
+                html += `</div>`;
+            } else if (question.question_type === 'choice') {
+                const saved = answers[question.id];
+                const options = JSON.parse(question.options);
+                html += `<div class="yesno-buttons">`;
+                options.forEach(option => {
+                    html += `
+                        <button class="yesno-btn ${saved === option ? 'selected' : ''}" onclick="setAnswer(${question.id}, '${option}')">${option}</button>
+                    `;
+                });
+                html += `</div>`;
+            }
+            
+            html += `</div></div>`;
+            container.innerHTML = html;
+            
+            // Update progress
+            const progress = ((currentIndex + 1) / questions.length) * 100;
+            document.getElementById('progressFill').style.width = `${progress}%`;
+            
+            // Update buttons
+            document.getElementById('prevBtn').style.display = currentIndex > 0 ? 'inline-block' : 'none';
+            document.getElementById('nextBtn').style.display = currentIndex < questions.length - 1 ? 'inline-block' : 'none';
+            document.getElementById('submitBtn').style.display = currentIndex === questions.length - 1 ? 'inline-block' : 'none';
+        }
+        
+        function setAnswer(questionId, value) {
+            answers[questionId] = value.toString();
+            renderQuestion();
+        }
+        
+        function updateChecklist(questionId, value, checked) {
+            let current = answers[questionId] ? JSON.parse(answers[questionId]) : [];
+            if (checked) {
+                if (!current.includes(value)) current.push(value);
+            } else {
+                current = current.filter(v => v !== value);
+            }
+            answers[questionId] = JSON.stringify(current);
+            renderQuestion();
+        }
+        
+        function nextQuestion() {
+            if (currentIndex < questions.length - 1) {
+                currentIndex++;
+                renderQuestion();
+            }
+        }
+        
+        function prevQuestion() {
+            if (currentIndex > 0) {
+                currentIndex--;
+                renderQuestion();
+            }
+        }
+        
+        async function submitAssessment() {
+            // Check if all questions are answered
+            const answeredCount = Object.keys(answers).length;
+            if (answeredCount < questions.length) {
+                alert(`Please answer all questions. (${answeredCount}/${questions.length} completed)`);
+                return;
+            }
+            
+            // Format answers for API
+            const formattedAnswers = Object.entries(answers).map(([questionId, answer]) => ({
+                questionId: parseInt(questionId),
+                answer: answer
+            }));
+            
+            try {
+                const response = await fetch('/api/assessment/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ answers: formattedAnswers })
+                });
+                
+                const result = await response.json();
+                
+                // Save session token to localStorage
+                localStorage.setItem('sessionToken', result.sessionToken);
+                localStorage.setItem('riskLevel', result.riskLevel);
+                localStorage.setItem('recommendation', result.recommendation);
+                
+                // Redirect to results page
+                window.location.href = '/result';
+            } catch (error) {
+                console.error('Error submitting assessment:', error);
+                alert('Failed to submit assessment. Please try again.');
+            }
+        }
+        
+        loadQuestions();
+    </script>
+</body>
+</html>
