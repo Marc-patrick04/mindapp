@@ -12,25 +12,37 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Logging middleware (helps debug)
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Import routes
+// ============================================
+// IMPORT ROUTES
+// ============================================
 const assessmentRoutes = require('./routes/assessment');
 const adminRoutes = require('./routes/admin');
 const supportRoutes = require('./routes/support');
 const questionsRoutes = require('./routes/questions');
 
 // ============================================
-// MOUNT API ROUTES
+// MOUNT API ROUTES - THIS IS THE CRITICAL PART
 // ============================================
+
+// Mount questions routes (should be first)
+app.use('/api', questionsRoutes);  // This handles /api/questions
+
+// Mount other routes
 app.use('/api/assessment', assessmentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/support', supportRoutes);
-app.use('/api', questionsRoutes);  // This should handle /api/questions
 
 // ============================================
-// HTML ROUTES (for serving pages)
+// HTML ROUTES
 // ============================================
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -61,14 +73,28 @@ app.get('/result', (req, res) => {
 });
 
 // ============================================
-// 404 Handler for undefined routes
+// HEALTH CHECK ENDPOINT (for debugging)
+// ============================================
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    endpoints: ['/api/questions', '/api/assessment', '/api/admin', '/api/support']
+  });
+});
+
+// ============================================
+// 404 HANDLER
 // ============================================
 app.use('*', (req, res) => {
-  // Check if it's an API request
   if (req.path.startsWith('/api/')) {
-    res.status(404).json({ error: `API endpoint '${req.path}' not found` });
+    console.log(`404 - API endpoint not found: ${req.path}`);
+    res.status(404).json({
+      error: `API endpoint '${req.path}' not found`,
+      availableEndpoints: ['/api/questions', '/api/assessment/submit', '/api/admin/login']
+    });
   } else {
-    res.status(404).sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
   }
 });
 
@@ -80,7 +106,9 @@ app.use((err, req, res, next) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
-  console.log(`📡 API available at http://localhost:${PORT}/api`);
+  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📡 API Base URL: http://localhost:${PORT}/api`);
   console.log(`📊 Questions endpoint: http://localhost:${PORT}/api/questions`);
+  console.log(`🏥 Health check: http://localhost:${PORT}/api/health`);
 });
